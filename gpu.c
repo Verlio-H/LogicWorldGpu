@@ -62,6 +62,7 @@ typedef struct execUnit {
   ((byte) & 0x01 ? '1' : '0') 
 
 //#define DEBUG 1
+//#define DEBUG_COMMANDS 1
 
 typedef enum gpuOp {
     OP_ADD, //0
@@ -376,13 +377,14 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                 int16_t x = core->registers[thread][62];
                 int16_t y = core->registers[thread][63];
                 uint16_t colorUpper = core->registers[thread][op1];
-                uint16_t colorLower = core->registers[thread][op2];
+                uint16_t colorMid = core->registers[thread][op2];
+                uint16_t colorLower = core->registers[thread][op3];
                 if (x<width && y<height) {
                     mtx_lock(mtxptr);
                     if (buffered) bwrite = data2; else bwrite = data;
                     
                     bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4] = colorUpper & 0xFF;
-                    bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4+1] = colorLower >> 8;
+                    bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4+1] = colorMid & 0xFF;
                     bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4+2] = colorLower & 0xFF;
                     mtx_unlock(mtxptr);
                 }
@@ -577,14 +579,16 @@ void executeCommandBuffer() {
         uint16_t commandPtr = commandId * gpu_commandStride + gpu_commandBufferPtr;
         uint16_t countx = gpu_deviceMemory[commandPtr]; //potentially should be atomic but whatevs
         uint16_t county = gpu_deviceMemory[commandPtr + 1];
-        #ifdef DEBUG
+        #ifdef DEBUG_COMMANDS
             for (int i = 0; i < 5; ++i) {
                 printf("%5d ", gpu_deviceMemory[commandPtr + i]);
             }
-            for (int i = 5; i <= 10; ++i) {
-                printf("%8.5f ", (double)*(_Float16 *)&gpu_deviceMemory[commandPtr + i]);
+            for (int i = 5; i <= 11; ++i) {
+                printf("%10.7f ", (double)*(_Float16 *)&gpu_deviceMemory[commandPtr + i]);
             }
             printf("\n");
+        #endif
+        #ifdef DEBUG
             printf("count x: %d, count y: %d\n", countx, county);
         #endif
         if ((int16_t)countx == -1) {
