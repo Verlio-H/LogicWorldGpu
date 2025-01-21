@@ -18,8 +18,10 @@
 #include "gpu.h"
 #include "graphics.h"
 
-//MacOS compile command:
-//clang main.c gpu.c graphics.c include/*.c -L/opt/homebrew/lib -lglfw -framework OpenGL -Ofast -march=native -Wall -Wextra
+//Approximate MacOS compile command:
+//clang main.c gpu.c graphics.c include/*.c -lglfw -framework OpenGL -Ofast -march=native -Wall -Wextra
+//Approximate Linux compile command:
+//clang main.c gpu.c graphics.c include/*.c -lglfw -lGL -lm -lpthread -Ofast -march=native -Wall -Wextra
 
 const uint32_t vertexShader[] = {
     025010000, 025020002, 030020214, 006030101, 000020203, 030040200, 030050204, 031040301, 
@@ -29,12 +31,12 @@ const uint32_t vertexShader[] = {
 const uint32_t geometryShader[] = {
     025010000, 025020002, 030020214, 006030102, 000020203, 030040200, 030050204, 030060210,
     017110001, 034110011, 006031103, 006121102, 000030312, 030130401, 030140501, 030150601,
-    000551300, 011361315, 011371413, 011401513, 043000000, 001001413, 046000004, 000161400,
+    000551300, 011361315, 011371413, 011401513, 017432100, 006434304, 013413743, 013424043, 013434343, 043000000, 001001413, 046000004, 000161400,
     000141300, 000131600, 044000000, 043000000, 001001513, 046000004, 000131500, 045000000,
-    001001514, 046000005, 000141500, 044000000, 017151600, 006151504, 010141415, 030250405,
-    030260505, 030270605, 000562500, 011522725, 011502526, 011512625, 015131300, 012413752,
-    016611300, 011556155, 015141400, 012425140, 001141413, 011414142, 004141401, 007141401,
-    006141402, 017421700, 006424204, 013414241, 043000000, 001002625, 046000004, 000162600,
+    001001514, 046000005, 000141500, 044000000, 0031430354, 017151600, 006151504, 010141415, 030250405,
+    030260505, 030270605, 000562500, 011522725, 011502526, 011512625, 015131300, 012414152,
+    016611300, 011556155, 015141400, 012425142, 001141413, 011414142, 004141401, 007141401,
+    006141402, 013414341, 043000000, 001002625, 046000004, 000162600,
     000262500, 000251600, 044000000, 012525241, 012505041, 012363641, 012373741, 012575552,
     043000000, 001272500, 046000004, 000252700, 045000000, 001002726, 046000005, 000262700,
     044000000, 010262615, 015252500, 012605550, 016612500, 017011000, 011566156, 031010310,
@@ -43,19 +45,14 @@ const uint32_t geometryShader[] = {
     031570344, 031600350, 047000000, 000000000
 };
 
-// const uint32_t fragmentShader[] = {
-//     025010000, 025020001, 025030002, 030040314, 030050320, 006020201, 017060001, 002060106,
-//     000020206, 007010101, 000760401, 000770502, 020017777, 032010100, 047000000, 000000000
-// };
-
 const uint32_t fragmentShader[] = {
     025010000, 025020001, 025030002, 030040314, 030050320, 030120324, 030130330, 030140334,
     030150340, 030160344, 030170350, 006020201, 017060001, 002060106, 000020206, 007010101,
-    016200100, 016210200, 012121220, 012141421, 012131320, 010121214, 012151521, 000770502,
-    010131315, 010121216, 043000000, 000760401, 010131317, 000121200, 046000005, 017021700,
-    006020204, 011020212, 000131300, 046000005, 017012677, 011020213, 006010104, 004010110,
-    012121201, 000020200, 046000005, 012131301, 012020201, 015121200, 015131300, 015020200,
-    006131310, 000131302, 032121300, 044000000, 047000000, 000000000
+    016200100, 016210200, 012121220, 012131320, 012141421, 012151521, 000770502, 010121214, 017021700,
+    010131315, 017302100, 010121216, 000760401, 043000000, 010131317, 006303004, 013121230,
+    000121200, 046000005, 013131330, 006020204, 011020212, 000131300, 046000005,
+    017012677, 011020213, 006010104, 004010110, 012121201, 000020200, 046000005, 012131301,
+    012020201, 015121200, 015131300, 015020200, 032121302, 044000000, 047000000, 000000000
 };
 
 #define countof(x) (sizeof(x)/sizeof((x)[0]))
@@ -76,39 +73,34 @@ int run() {
 
     //create VBO
     _Float16 tmpFloat;
-    tmpFloat = 0.5 * width;
+    tmpFloat = 0.1 * width;
     atomic_store(gpu_deviceMemory + 1024 + 0*2 + 0, *(uint16_t *)&tmpFloat);
-    tmpFloat = 0.25 * width;
+    tmpFloat = 0.1 * width;
     atomic_store(gpu_deviceMemory + 1024 + 0*2 + 1, *(uint16_t *)&tmpFloat);
     
-    tmpFloat = 0.383 * width;
+    tmpFloat = 0.9 * width;
     atomic_store(gpu_deviceMemory + 1024 + 1*2 + 0, *(uint16_t *)&tmpFloat);
-    tmpFloat = 0.625 * width;
+    tmpFloat = 0.1 * width;
     atomic_store(gpu_deviceMemory + 1024 + 1*2 + 1, *(uint16_t *)&tmpFloat);
 
-    tmpFloat = 0.717 * width;
+    tmpFloat = 0.1 * width;
     atomic_store(gpu_deviceMemory + 1024 + 2*2 + 0, *(uint16_t *)&tmpFloat);
-    tmpFloat = 0.725 * width;
+    tmpFloat = 0.9 * width;
     atomic_store(gpu_deviceMemory + 1024 + 2*2 + 1, *(uint16_t *)&tmpFloat);
 
-    tmpFloat = 0.6 * width;
+    tmpFloat = 0.9 * width;
     atomic_store(gpu_deviceMemory + 1024 + 3*2 + 0, *(uint16_t *)&tmpFloat);
-    tmpFloat = 0.25 * width;
+    tmpFloat = 0.9 * width;
     atomic_store(gpu_deviceMemory + 1024 + 3*2 + 1, *(uint16_t *)&tmpFloat);
-
-    tmpFloat = 0.824 * width;
-    atomic_store(gpu_deviceMemory + 1024 + 4*2 + 0, *(uint16_t *)&tmpFloat);
-    tmpFloat = 0.225 * width;
-    atomic_store(gpu_deviceMemory + 1024 + 4*2 + 1, *(uint16_t *)&tmpFloat);
 
     //create EBO
     atomic_store(gpu_deviceMemory + 2048 + 0*4 + 0, 0*2);
-    atomic_store(gpu_deviceMemory + 2048 + 0*4 + 1, 1*2);
-    atomic_store(gpu_deviceMemory + 2048 + 0*4 + 2, 2*2);
+    atomic_store(gpu_deviceMemory + 2048 + 0*4 + 1, 2*2);
+    atomic_store(gpu_deviceMemory + 2048 + 0*4 + 2, 1*2);
 
-    atomic_store(gpu_deviceMemory + 2048 + 1*4 + 0, 3*2);
+    atomic_store(gpu_deviceMemory + 2048 + 1*4 + 0, 1*2);
     atomic_store(gpu_deviceMemory + 2048 + 1*4 + 1, 2*2);
-    atomic_store(gpu_deviceMemory + 2048 + 1*4 + 2, 4*2);
+    atomic_store(gpu_deviceMemory + 2048 + 1*4 + 2, 3*2);
 
     //spawn gpu thread
     atomic_store(&gpu_busy, true);
@@ -135,7 +127,7 @@ int run() {
 
         //stride of 12 to contain triangle stuff
         //first command (vertex shader)
-        atomic_store(gpu_deviceMemory + 0*12 + 0, 5  ); //vertex count
+        atomic_store(gpu_deviceMemory + 0*12 + 0, 4  ); //vertex count
         atomic_store(gpu_deviceMemory + 0*12 + 1, 1  ); //thread count y
         atomic_store(gpu_deviceMemory + 0*12 + 2, 0  ); //shader addr
         atomic_store(gpu_deviceMemory + 0*12 + 3, 1024); //VBO start address in shared buffer

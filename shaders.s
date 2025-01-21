@@ -34,6 +34,13 @@ FSUB R30 R11 R13 //x0-x2																											011361315
 FSUB R31 R12 R11 //x1-x0																											011371413
 FSUB R32 R13 R11 //x2-x0																											011401513
 
+
+IMM R35 0x540																														017432500
+BSL R35 R35 4 //16.0f																												006434304
+FDIV R33 R31 R35 //potentially swap to FMLT, but 16f can't be reused																013413743
+FDIV R34 R32 R35																													013424043
+FDIV R35 R35 R35																													013434343
+
 PSHM //swap order if necessary																										043000000
 SUB R0 R12 R11																														001001413
 FLGM N //if (R12 < R11)																												046000004
@@ -66,19 +73,17 @@ FSUB R40 R21 R22																													011502526
 FSUB R41 R22 R21																													011512625
 //
 FTOI R11 R11																														015131300
-FMLT R33 R31 R42																													012413752
+FMLT R33 R33 R42																													012414152
 ITOF R49 R11																														016611300
 FSUB R45 R49 R45																													011556155
 FTOI R12 R12																														015141400
-FMLT R34 R41 R32																													012425140
+FMLT R34 R41 R34																													012425142
 SUB R12 R12 R11																														001141413
 FSUB R33 R33 R34 //determinant																										011414142
 ADDI R12 R12 1																														004141401
 BSR R12 R12 1																														007141401
 BSL R12 R12 2 //x size * 2, R11 = x start																							006141402
-IMM R34 0x3C0																														017421700
-BSL R34 R34 4																														006424204
-FDIV R33 R34 R33																													013414241
+FDIV R33 R35 R33																													013414341
 
 PSHM //swap order if necessary																										043000000
 SUB R0 R22 R21																														001002625
@@ -154,25 +159,29 @@ BSR R1 R1 1																															007010101
 ITOF R16 R1 //x float																												016200100
 ITOF R17 R2 //y float																												016210200
 FMLT R10 R10 R16																													012121220
-FMLT R12 R12 R17																													012141421
 FMLT R11 R11 R16																													012131320
-FADD R10 R10 R12																													010121214
+FMLT R12 R12 R17																													012141421
 FMLT R13 R13 R17																													012151521
 ADD R63 R5 R2 //ycoord																												000770502
+FADD R10 R10 R12																													010121214
+IMM R2 0x3C0																														017021700
 FADD R11 R11 R13																													010131315
+IMM R24 0x540																														017302100
 FADD R10 R10 R14 //u																												010121216
-PSHM																																043000000
 ADD R62 R4 R1 //xcoord																												000760401
+PSHM																																043000000
 FADD R11 R11 R15 //v																												010131317
+BSL R24 R24 4 //16.0f																												006303004
+FDIV R10 R10 R24																													013121230
 MOV R10 R10																															000121200
 FLGM P																																046000005
-	IMM R2 0x3C0																													017021700
+	FDIV R11 R11 R24																												013131330
 	BSL R2 R2 4 //1.0f																												006020204
 	FSUB R2 R2 R10																													011020212
 	MOV R11 R11																														000131300
 	FLGM P																															046000005
-		IMM R1 0x5BF
-		FSUB R2 R2 R11																												017012677
+		IMM R1 0x5BF																												017012677
+		FSUB R2 R2 R11																												011020213
 		BSL R1 R1 4																													006010104
 		ADDI R1 R1 8																												004010110
 		FMLT R10 R10 R1																												012121201
@@ -183,9 +192,7 @@ FLGM P																																046000005
 			FTOI R10 R10																											015121200
 			FTOI R11 R11																											015131300
 			FTOI R2 R2																												015020200
-			BSL R11 R11 8																											006131310
-			ADD R11 R11 R2																											000131302
-			OUT R10 R11																												032121300
+			OUT R10 R11 R2																											032121302
 POPM																																044000000
 HLT																																	047000000
 NOP																																	000000000
