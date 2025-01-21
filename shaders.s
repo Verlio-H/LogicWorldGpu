@@ -55,7 +55,7 @@ FLGM N //if (R13 < R11)																												046000004
 	MOV R11 R13																														000131500
 XORM //else																															045000000
 	SUB R0 R13 R12																													001001514
-	FLGM P //if (R13 >= R12)																										046000005
+	FLGM NN //if (R13 >= R12)																										046000005
 		MOV R12 R13																													000141500
 POPM																																044000000
 //todo: calculate rasterization increment values																					
@@ -105,7 +105,7 @@ FLGM N //if (R23 < R21)																												046000004
 	MOV R21 R23																														000252700
 XORM //else																															045000000
 	SUB R0 R23 R22																													001002726
-	FLGM P //if (R23 >= R22)																										046000005
+	FLGM NN //if (R23 >= R22)																										046000005
 		MOV R22 R23																													000262700
 POPM																																044000000
 //todo: calculate rasterization increment values
@@ -174,19 +174,19 @@ FADD R11 R11 R15 //v																												010131317
 BSL R24 R24 4 //16.0f																												006303004
 FDIV R10 R10 R24																													013121230
 MOV R10 R10																															000121200
-FLGM P																																046000005
+FLGM NN																																046000005
 	FDIV R11 R11 R24																												013131330
 	BSL R2 R2 4 //1.0f																												006020204
 	FSUB R2 R2 R10																													011020212
 	MOV R11 R11																														000131300
-	FLGM P																															046000005
+	FLGM NN																															046000005
 		IMM R1 0x5BF																												017012677
 		FSUB R2 R2 R11																												011020213
 		BSL R1 R1 4																													006010104
 		ADDI R1 R1 8																												004010110
 		FMLT R10 R10 R1																												012121201
 		MOV R2 R2																													000020200
-		FLGM P																														046000005
+		FLGM NN																														046000005
 			FMLT R11 R11 R1																											012131301
 			FMLT R2 R2 R1																											012020201
 			FTOI R10 R10																											015121200
