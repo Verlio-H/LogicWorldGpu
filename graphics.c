@@ -8,6 +8,9 @@
 #include "include/glad.h"
 #include <GLFW/glfw3.h>
 
+#define WIDTH 256
+#define HEIGHT 256
+
 uint8_t* data = NULL;
 uint8_t* data2;
 uint8_t* bwrite;
@@ -19,9 +22,6 @@ int rwidth,rheight;
 
 mtx_t windowmtx;
 GLFWwindow *window;
-
-#define WIDTH 256
-#define HEIGHT 256
 
 uint32_t texture;
 
@@ -131,6 +131,8 @@ void initRender(int (*renderFunction)(void *)) {
     rwidth = width;
     rheight = height;
     glViewport(0, 0, width, height);
+    width = WIDTH;
+    height = HEIGHT;
     data = malloc(width*height*4);
     char* title = malloc(64);
     snprintf(title, 64, "%dx%d", width, height);
