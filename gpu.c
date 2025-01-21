@@ -23,7 +23,7 @@ typedef struct execUnit {
     uint16_t registers[WAVE_SIZE][64];
     uint16_t mem[1024];
     atomic_short info[WAVE_SIZE][3];
-    atomic_bool flags[WAVE_SIZE][8];
+    atomic_bool flags[WAVE_SIZE][16];
     _Float16 pipeliningBufferVals[WAVE_SIZE][BUFFER_COUNT];
     uint8_t pipeliningBufferDests[WAVE_SIZE][BUFFER_COUNT];
     thrd_t thread;
@@ -34,9 +34,18 @@ typedef struct execUnit {
 #define FLAG_C 2 //carry out
 #define FLAG_NC 3 //not carry out
 #define FLAG_N 4 //negative
-#define FLAG_P 5 //positive
-#define FLAG_V 6 //overflow
-#define FLAG_NV 7 //not overflow
+#define FLAG_NN 5 //not negative
+#define FLAG_P 6
+#define FLAG_NP 7
+#define FLAG_V 8 //overflow
+#define FLAG_NV 9 //not overflow
+#define FLAG_O 10 //odd
+#define FLAG_NO 11 //even
+#define FLAG_LT 12 //signed less than
+#define FLAG_GE 13 //signed greater than or equal to
+#define FLAG_E 14 //exception (float)
+#define FLAG_F 15 //false
+
 
 #define BUFFER_FADD_0 0
 #define BUFFER_FADD_1 1
@@ -136,15 +145,33 @@ void updateFlags(execUnit *core, int thread, uint16_t result) {
     }
     if (result & 0x8000) {
         core->flags[thread][FLAG_N] = true;
-        core->flags[thread][FLAG_P] = false;
+        core->flags[thread][FLAG_NN] = false;
     } else {
         core->flags[thread][FLAG_N] = false;
+        core->flags[thread][FLAG_NN] = true;
+    }
+    if ((int16_t)result > 0) {
         core->flags[thread][FLAG_P] = true;
+        core->flags[thread][FLAG_NP] = false;
+    } else {
+        core->flags[thread][FLAG_P] = false;
+        core->flags[thread][FLAG_NP] = true;
+    }
+    if (result & 1) {
+        core->flags[thread][FLAG_O] = true;
+        core->flags[thread][FLAG_NO] = false;
+    } else {
+        core->flags[thread][FLAG_O] = false;
+        core->flags[thread][FLAG_NO] = true;
     }
     core->flags[thread][FLAG_C] = false;
     core->flags[thread][FLAG_NC] = true;
     core->flags[thread][FLAG_V] = false;
     core->flags[thread][FLAG_NV] = true;
+    core->flags[thread][FLAG_LT] = core->flags[thread][FLAG_N] ^ core->flags[thread][FLAG_V];
+    core->flags[thread][FLAG_GE] = !core->flags[thread][FLAG_LT];
+    core->flags[thread][FLAG_E] = false;
+    core->flags[thread][FLAG_F] = false;
 }
 
 void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t op2, uint32_t op3) {
@@ -174,6 +201,8 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                     core->flags[thread][FLAG_V] = false;
                     core->flags[thread][FLAG_NV] = true;
                 }
+                core->flags[thread][FLAG_LT] = core->flags[thread][FLAG_N] ^ core->flags[thread][FLAG_V];
+                core->flags[thread][FLAG_GE] = !core->flags[thread][FLAG_LT];
                 core->registers[thread][op1] = result;
                 break;
             }
@@ -196,6 +225,8 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                     core->flags[thread][FLAG_V] = false;
                     core->flags[thread][FLAG_NV] = true;
                 }
+                core->flags[thread][FLAG_LT] = core->flags[thread][FLAG_N] ^ core->flags[thread][FLAG_V];
+                core->flags[thread][FLAG_GE] = !core->flags[thread][FLAG_LT];
                 core->registers[thread][op1] = result;
                 break;
             }
@@ -699,7 +730,7 @@ int startGpu() {
     }
 
     for (int i = 0; i < CORE_COUNT; ++i) {
-        thrd_join(gpu[i].thread, NULL);
+        //thrd_join(gpu[i].thread, NULL);
     }
     return 0;
 }
