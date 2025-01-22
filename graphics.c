@@ -188,12 +188,14 @@ void initRender(int (*renderFunction)(void *)) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    // setup actual render thread
     mtx_t windowmtx;
     mtx_init(&windowmtx,mtx_plain);
-    thrd_t renderthread;
     mtxptr = &windowmtx;
-    thrd_create(&renderthread, renderFunction, NULL);
+
+    bool stop = false;
+    bool *pStop = &stop;
+    thrd_t renderthread;
+    thrd_create(&renderthread, renderFunction, &pStop);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glfwSwapInterval(0);
@@ -213,6 +215,7 @@ void initRender(int (*renderFunction)(void *)) {
         glfwPollEvents();
     }
     glfwTerminate();
+    stop = true;
     thrd_join(renderthread, NULL);
 
     free(data);
