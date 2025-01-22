@@ -1,3 +1,6 @@
+#ifndef GRAPHICS_H
+#define GRAPHICS_H
+
 #include <GLFW/glfw3.h>
 #include <stdbool.h>
 
@@ -12,3 +15,4 @@ extern mtx_t* mtxptr;
 
 void initRender(int (*renderFunction)(void *));
 
+#endif
