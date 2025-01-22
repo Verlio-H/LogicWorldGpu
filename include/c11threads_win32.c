@@ -1144,4 +1144,6 @@ void call_once(once_flag *flag, void (*func)(void))
 	}
 }
 
+#else
+	extern void a; //to silence clang
 #endif
