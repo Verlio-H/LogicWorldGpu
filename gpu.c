@@ -46,7 +46,6 @@ typedef struct execUnit {
 #define FLAG_E 14 //exception (float)
 #define FLAG_F 15 //false
 
-
 #define BUFFER_FADD_0 0
 #define BUFFER_FADD_1 1
 #define BUFFER_FADD_2 2
@@ -63,12 +62,7 @@ typedef struct execUnit {
 #define BUFFER_FSQRT_2 13
 #define BUFFER_FSQRT_3 14
 
-#define NIBBLE_BINARY_PATTERN "%c%c%c%c"
-#define NIBBLE_BINARY(byte)  \
-  ((byte) & 0x08 ? '1' : '0'), \
-  ((byte) & 0x04 ? '1' : '0'), \
-  ((byte) & 0x02 ? '1' : '0'), \
-  ((byte) & 0x01 ? '1' : '0') 
+#define UNUSED(x) ((void)x)
 
 //#define DEBUG 1
 //#define DEBUG_COMMANDS 1
@@ -143,6 +137,7 @@ void updateFlags(execUnit *core, int thread, uint16_t result) {
         core->flags[thread][FLAG_Z] = false;
         core->flags[thread][FLAG_NZ] = true;
     }
+
     if (result & 0x8000) {
         core->flags[thread][FLAG_N] = true;
         core->flags[thread][FLAG_NN] = false;
@@ -150,6 +145,7 @@ void updateFlags(execUnit *core, int thread, uint16_t result) {
         core->flags[thread][FLAG_N] = false;
         core->flags[thread][FLAG_NN] = true;
     }
+
     if ((int16_t)result > 0) {
         core->flags[thread][FLAG_P] = true;
         core->flags[thread][FLAG_NP] = false;
@@ -157,6 +153,7 @@ void updateFlags(execUnit *core, int thread, uint16_t result) {
         core->flags[thread][FLAG_P] = false;
         core->flags[thread][FLAG_NP] = true;
     }
+
     if (result & 1) {
         core->flags[thread][FLAG_O] = true;
         core->flags[thread][FLAG_NO] = false;
@@ -164,6 +161,7 @@ void updateFlags(execUnit *core, int thread, uint16_t result) {
         core->flags[thread][FLAG_O] = false;
         core->flags[thread][FLAG_NO] = true;
     }
+
     core->flags[thread][FLAG_C] = false;
     core->flags[thread][FLAG_NC] = true;
     core->flags[thread][FLAG_V] = false;
@@ -294,8 +292,8 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
             }
             case (OP_BSR): {
                 uint16_t result;
-                if (op3 & 0b100000) {
-                    op3 = op3 & 0b011111;
+                if (op3 & 040) {
+                    op3 = op3 & 037;
                     result = (int16_t)core->registers[thread][op2] >> op3;
                 } else {
                     result = (uint16_t)core->registers[thread][op2] >> op3;
@@ -359,7 +357,7 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
             }
             case (OP_SIMM): {
                 core->registers[thread][op1] = (((uint16_t)op2) << 6) + (uint16_t)op3;
-                if (op2 & 0b100000) {
+                if (op2 & 040) {
                     core->registers[thread][op1] += 0xF000;
                 }
                 break;
@@ -395,12 +393,12 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                 break;
             }
             case (OP_DLOD): {
-                uint32_t addr = core->registers[thread][op2] + (((uint32_t)op3 & 0b11) << 16) + (op3 >> 2);
+                uint32_t addr = core->registers[thread][op2] + (((uint32_t)op3 & 3) << 16) + (op3 >> 2);
                 core->registers[thread][op1] = atomic_load(&gpu_deviceMemory[addr]);
                 break;
             }
             case (OP_DSTR): {
-                uint32_t addr = core->registers[thread][op2] + (((uint32_t)op3 & 0b11) << 16) + (op3 >> 2);
+                uint32_t addr = core->registers[thread][op2] + (((uint32_t)op3 & 3) << 16) + (op3 >> 2);
                 atomic_store(&gpu_deviceMemory[addr], core->registers[thread][op1]);
                 break;
             }
@@ -412,11 +410,20 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                 uint16_t colorLower = core->registers[thread][op3];
                 if (x<width && y<height) {
                     mtx_lock(mtxptr);
-                    if (buffered) bwrite = data2; else bwrite = data;
+
+                    uint8_t *bwrite;
+                    if (buffered) {
+                        bwrite = data2;
+                    } else {
+                        bwrite = data;
+                    }
                     
-                    bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4] = colorUpper & 0xFF;
-                    bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4+1] = colorMid & 0xFF;
-                    bwrite[((buffered ? height2 : height)-y)*(buffered ? width2 : width)*4+x*4+2] = colorLower & 0xFF;
+                    uint16_t buffWidth = buffered ? width2 : width;
+                    uint16_t buffHeight = buffered ? height2 : height;
+                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 0] = colorUpper & 0xFF;
+                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 1] = colorMid & 0xFF;
+                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 2] = colorLower & 0xFF;
+
                     mtx_unlock(mtxptr);
                 }
                 break;
@@ -447,17 +454,19 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
 }
 
 int runCore(void *arg) {
-    int id = *(int *)arg;
+    uint16_t id = *(uint16_t *)arg;
     free(arg);
     execUnit *core = &gpu[id];
     core->absoluteMask = 0;
     core->decodeInst = 0;
-    for (int i = 0; i < WAVE_SIZE; ++i) {
-        for (int j = 0; j < BUFFER_COUNT; ++j) {
+
+    for (uint8_t i = 0; i < WAVE_SIZE; ++i) {
+        for (uint8_t j = 0; j < BUFFER_COUNT; ++j) {
             core->pipeliningBufferVals[i][j] = 0;
             core->pipeliningBufferDests[i][j] = 0;
         }
     }
+
     core->instructionCount = 0;
     atomic_store(&core->ready, true);
 
@@ -477,11 +486,10 @@ int runCore(void *arg) {
             ++core->instructionCount;
             uint32_t instruction = core->decodeInst;
             core->decodeInst = gpu_instructionMem[core->pc];
-            //printf("Core %d, Instruction %8o, Mask "NIBBLE_BINARY_PATTERN"\n", id, instruction, NIBBLE_BINARY(core->mask & core->absoluteMask));
-            gpuOp op = (instruction >> 18) & 0b111111;
-            uint32_t op1 = (instruction >> 12) & 0b111111;
-            uint32_t op2 = (instruction >> 6) & 0b111111;
-            uint32_t op3 = instruction & 0b111111;
+            gpuOp op = (instruction >> 18) & 077;
+            uint32_t op1 = (instruction >> 12) & 077;
+            uint32_t op2 = (instruction >> 6) & 077;
+            uint32_t op3 = instruction & 077;
 
             for (uint8_t thread = 0; thread < WAVE_SIZE; ++thread) {
 
@@ -596,17 +604,17 @@ int runCore(void *arg) {
     }
 }
 
-void executeCommandBuffer() {
+void executeCommandBuffer(void) {
     uint16_t queue[WAVE_SIZE][3];
     bool queueMask[WAVE_SIZE];
     uint16_t queuePtr = 0;
-    for (int i = 0; i < WAVE_SIZE; ++i) {
+    for (uint8_t i = 0; i < WAVE_SIZE; ++i) {
         queue[i][0] = 0;
         queue[i][1] = 0;
         queueMask[i] = false;
     }
 
-    for (int commandId = 0; commandId < atomic_load(&gpu_atomics[gpu_atomicNumber]); ++commandId) {
+    for (uint16_t commandId = 0; commandId < atomic_load(&gpu_atomics[gpu_atomicNumber]); ++commandId) {
         uint16_t commandPtr = commandId * gpu_commandStride + gpu_commandBufferPtr;
         uint16_t countx = gpu_deviceMemory[commandPtr]; //potentially should be atomic but whatevs
         uint16_t county = gpu_deviceMemory[commandPtr + 1];
@@ -650,7 +658,7 @@ void executeCommandBuffer() {
 
                 if (queuePtr == WAVE_SIZE || (threadIdy * countx + threadIdx) == (countx * county) - 1) {
                     //find free core
-                    int core = 0;
+                    uint16_t core = 0;
                     for (;; core = (core + 1) % CORE_COUNT) {
                         if (atomic_load(&gpu[core].ready)) {
                             break;
@@ -667,7 +675,7 @@ void executeCommandBuffer() {
                     atomic_store(&gpu[core].pc, shaderAddr);
                     //this has to be mem copied because of stack allocation
                     uint64_t absoluteMask = 0;
-                    for (int i = 0; i < WAVE_SIZE; ++i) {
+                    for (uint8_t i = 0; i < WAVE_SIZE; ++i) {
                         atomic_store(&gpu[core].info[i][0], queue[i][0]);
                         atomic_store(&gpu[core].info[i][1], queue[i][1]);
                         atomic_store(&gpu[core].info[i][2], queue[i][2]);
@@ -677,7 +685,7 @@ void executeCommandBuffer() {
                     atomic_store(&gpu[core].absoluteMask, absoluteMask);
 
                     //reset queue
-                    for (int i = 0; i < WAVE_SIZE; ++i) {
+                    for (uint8_t i = 0; i < WAVE_SIZE; ++i) {
                         queue[i][0] = 0;
                         queue[i][1] = 0;
                         queue[i][2] = 0;
@@ -694,14 +702,15 @@ void executeCommandBuffer() {
     }
 }
 
-int startGpu() {
+int startGpu(void *args) {
+    UNUSED(args);
     srand(time(NULL));
     atomic_store(&gpu_start, 0);
     atomic_store(&gpu_stop, 0);
     atomic_store(&gpu_instruction_count, 0);
 
     //init execution threads
-    for (int i = 0; i < CORE_COUNT; ++i) {
+    for (uint16_t i = 0; i < CORE_COUNT; ++i) {
         atomic_store(&gpu[i].absoluteMask, 0);
         atomic_store(&gpu[i].ready, false);
         int *id = malloc(sizeof(int));
@@ -717,7 +726,7 @@ int startGpu() {
             executeCommandBuffer();
             for (;;) {
                 bool exit = true;
-                for (int core = 0; core < CORE_COUNT; ++core) {
+                for (uint16_t core = 0; core < CORE_COUNT; ++core) {
                     if (!atomic_load(&gpu[core].ready)) {
                         exit = false;
                     }
@@ -729,8 +738,9 @@ int startGpu() {
         thrd_sleep(&(struct timespec){.tv_nsec = 10}, NULL);
     }
 
-    for (int i = 0; i < CORE_COUNT; ++i) {
-        //thrd_join(gpu[i].thread, NULL);
+    for (uint16_t i = 0; i < CORE_COUNT; ++i) {
+        thrd_join(gpu[i].thread, NULL);
     }
+    
     return 0;
 }
