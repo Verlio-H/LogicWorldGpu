@@ -17,15 +17,13 @@
 //public (locked by window mutex)
 uint8_t* data = NULL;
 uint8_t* data2;
-uint8_t* bwrite;
-int buffered = 0;
-int width, height;
-int width2, height2;
+bool buffered = false;
+uint16_t width, height;
+uint16_t width2, height2;
 mtx_t* mtxptr;
 
 //private
 int rwidth,rheight;
-GLFWwindow *window;
 
 float vertices[] = {
     1.0, -1.0, 0.0,
@@ -114,6 +112,7 @@ void initRender(int (*renderFunction)(void *)) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
+    GLFWwindow* window;
     window = glfwCreateWindow(WIDTH, HEIGHT, "", NULL, NULL);
     if (!window) {
         glfwTerminate();
