@@ -1,9 +1,10 @@
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
+
 
 #include "include/c11threads.h"
 #include "include/glad.h"

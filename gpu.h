@@ -1,8 +1,8 @@
 #ifndef GPU_H
 #define GPU_H
 
-#include <stdbool.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 
 #define WAVE_SIZE 31
 #define CORE_COUNT 4

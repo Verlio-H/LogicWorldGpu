@@ -1,11 +1,13 @@
+#include <math.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <time.h>
+
+#include "include/c11threads.h"
+
 #include "gpu.h"
 #include "graphics.h"
-#include <stdint.h>
-#include "include/c11threads.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
 
 #define BUFFER_COUNT 15
 
