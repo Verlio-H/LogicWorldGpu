@@ -57,7 +57,9 @@ const uint32_t fragmentShader[] = {
 
 #define countof(x) (sizeof(x)/sizeof((x)[0]))
 
-int run() {
+int run(void *args) {
+    bool *stop = *(bool **)args;
+
     //copy shaders
     for (size_t i = 0; i < countof(vertexShader); ++i) {
         atomic_store(gpu_instructionMem + 0 + i, vertexShader[i]);
@@ -112,10 +114,9 @@ int run() {
         thrd_sleep(&(struct timespec){.tv_nsec = 10000}, NULL);
     };
 
-    uint32_t frame = 1;
     struct timespec prevTime;
     timespec_get(&prevTime, TIME_UTC);
-    while (!glfwWindowShouldClose(window)) {
+    for (uint32_t frame = 1; !*stop; ++frame) {
         if (frame % 32 == 0) {
             struct timespec time;
             timespec_get(&time, TIME_UTC);
@@ -123,9 +124,11 @@ int run() {
             printf("instruction count: %lld\n", atomic_load(&gpu_instruction_count));
             prevTime = time;
         }
+
         //encode command buffer
 
-        //stride of 12 to contain triangle stuff
+        //stride of 12 to contain triangle information after generation by geometry shader
+
         //first command (vertex shader)
         atomic_store(gpu_deviceMemory + 0*12 + 0, 4  ); //vertex count
         atomic_store(gpu_deviceMemory + 0*12 + 1, 1  ); //thread count y
@@ -149,30 +152,25 @@ int run() {
         //check busy state
         while (atomic_load(&gpu_busy)) { 
             thrd_sleep(&(struct timespec){.tv_nsec = 10}, NULL);
-        };
+        }
 
-        //write and clear display buffer
-        buffered = 0;
+        //write display buffer
         mtx_lock(mtxptr);
-        memcpy(data,data2,fmin(width,width2)*fmin(height,height2)*4);
+        memcpy(data, data2, fmin(width, width2) * fmin(height, height2) * 4);
         mtx_unlock(mtxptr);
         free(data2);
 
-        buffered = 1;
         mtx_lock(mtxptr);
         data2 = malloc(width * height * 4);
         width2 = width;
         height2 = height;
+
+        buffered = 1;
+
+        //clear display buffer
+        memset(data2, 0, height * width * 4);
+
         mtx_unlock(mtxptr);
-
-        if (buffered) {
-            bwrite = data2;
-        } else {
-            bwrite = data;
-        }
-
-        //clear buffer
-        memset(bwrite, 0, height * width * 4);
 
         //store time for vertex shader usage
         _Float16 time = glfwGetTime();
@@ -194,21 +192,19 @@ int run() {
             }
             thrd_sleep(&(struct timespec){.tv_nsec = 10}, NULL);
         }
+
         atomic_store(&gpu_start, false);
-        ++frame;
 
         while (atomic_load(&gpu_busy)) { 
             thrd_sleep(&(struct timespec){.tv_nsec = 10}, NULL);
-        };
+        }
     }
-    //} while (false);
-    printf("exiting...\n");
     
     atomic_store(&gpu_stop, true);
     thrd_join(gpu_thread, NULL);
     return 0;
 }
 
-int main() {
+int main(void) {
     initRender(run);
 }
