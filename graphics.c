@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "include/c11threads.h"
 #include "include/glad.h"
@@ -11,19 +12,20 @@
 #define WIDTH 256
 #define HEIGHT 256
 
+#define UNUSED(x) ((void)x)
+
+//public (locked by window mutex)
 uint8_t* data = NULL;
 uint8_t* data2;
 uint8_t* bwrite;
 int buffered = 0;
 int width, height;
 int width2, height2;
-void* mtxptr;
+mtx_t* mtxptr;
+
+//private
 int rwidth,rheight;
-
-mtx_t windowmtx;
 GLFWwindow *window;
-
-uint32_t texture;
 
 float vertices[] = {
     1.0, -1.0, 0.0,
@@ -33,43 +35,39 @@ float vertices[] = {
 };
 
 void framebuffer_size_callback(GLFWwindow* window, int wwidth, int wheight) {
-    mtx_lock(&windowmtx);
+    UNUSED(window);
+
     rwidth = wwidth;
     rheight = wheight;
-    mtx_unlock(&windowmtx);
-    char* title = malloc(64);
-    snprintf(title,64,"%dx%d",width,height);
-    glfwSetWindowTitle(window,title);
 }
 
 char *readFile(char *filename) {
     char *buffer = 0;
-    int len;
-    FILE *f = fopen(filename, "rb");
+    uint32_t len;
+    FILE *file = fopen(filename, "rb");
 
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        len = ftell(f);
-        fseek(f, 0, SEEK_SET);
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        len = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
         buffer = malloc(len + 1);
         if (buffer) {
-            fread(buffer, 1, len, f);
+            fread(buffer, 1, len, file);
         }
-        fclose(f);
+        fclose(file);
         buffer[len] = '\0';
     }
     return buffer;
 }
 
-uint32_t makeShader(const char *vertSrc, char *afragSrc) {
-    char *thing = "\0";
-    const char *fragSrc = strncat(afragSrc, thing, 16);
+uint32_t makeShader(const char * const vertSrc, const char * const fragSrc) {
     uint32_t vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertSrc, NULL);
     glCompileShader(vertexShader);
 
     // check for shader compile errors
-    int success;
+    int32_t success;
     char infoLog[512];
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
     if (!success) {
@@ -130,17 +128,19 @@ void initRender(int (*renderFunction)(void *)) {
         return;
     }
 
-    glfwGetFramebufferSize(window, &width, &height);
-    glfwSetWindowAspectRatio(window, width, height);
-    rwidth = width;
-    rheight = height;
-    glViewport(0, 0, width, height);
+    glfwGetFramebufferSize(window, &rwidth, &rheight);
+    glfwSetWindowAspectRatio(window, rwidth, rheight);
+
     width = WIDTH;
     height = HEIGHT;
-    data = malloc(width*height*4);
-    char* title = malloc(64);
+
+    data = malloc(width * height * 4);
+
+    char *title = malloc(64);
     snprintf(title, 64, "%dx%d", width, height);
     glfwSetWindowTitle(window, title);
+    free(title);
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     uint32_t VBO, VAO;
@@ -155,17 +155,19 @@ void initRender(int (*renderFunction)(void *)) {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), NULL);
     glEnableVertexAttribArray(0);
 
-    const char *vertexShaderSource = "#version 330 core\n"
+    char * const vertexShaderSource = "#version 330 core\n"
                                      "layout (location = 0) in vec3 aPos;\n"
                                      "void main()\n"
                                      "{\n"
                                      "   gl_Position = vec4(aPos, 1.0);\n"
                                      "}\0";
-    uint32_t shaderProgram = makeShader(vertexShaderSource, readFile("include/shader.fs"));
+    char * const fragmentShaderSource = readFile("include/shader.fs");
+    uint32_t shaderProgram = makeShader(vertexShaderSource, fragmentShaderSource);
 
     uint32_t framebuffer;
     glGenFramebuffers(1, &framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
     uint32_t textureColorbuffer;
     glGenTextures(1, &textureColorbuffer);
     glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
@@ -180,6 +182,7 @@ void initRender(int (*renderFunction)(void *)) {
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    uint32_t texture;
     glGenTextures(1, &texture);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -187,6 +190,7 @@ void initRender(int (*renderFunction)(void *)) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     // setup actual render thread
+    mtx_t windowmtx;
     mtx_init(&windowmtx,mtx_plain);
     thrd_t renderthread;
     mtxptr = &windowmtx;
@@ -200,6 +204,7 @@ void initRender(int (*renderFunction)(void *)) {
         glUniform1i(glGetUniformLocation(shaderProgram, "sizex"), rwidth);
         glUniform1i(glGetUniformLocation(shaderProgram, "sizey"), rheight);
         glUniform1i(glGetUniformLocation(shaderProgram, "pixels"), 0);
+        glViewport(0, 0, rwidth, rheight);
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -208,8 +213,8 @@ void initRender(int (*renderFunction)(void *)) {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-    mtx_lock(mtxptr);
-    mtx_unlock(mtxptr);
     glfwTerminate();
     thrd_join(renderthread, NULL);
+
+    free(data);
 }
