@@ -39,26 +39,6 @@ void framebuffer_size_callback(GLFWwindow* window, int wwidth, int wheight) {
     rheight = wheight;
 }
 
-char *readFile(char *filename) {
-    char *buffer = 0;
-    uint32_t len;
-    FILE *file = fopen(filename, "rb");
-
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        len = ftell(file);
-        fseek(file, 0, SEEK_SET);
-
-        buffer = malloc(len + 1);
-        if (buffer) {
-            fread(buffer, 1, len, file);
-        }
-        fclose(file);
-        buffer[len] = '\0';
-    }
-    return buffer;
-}
-
 uint32_t makeShader(const char * const vertSrc, const char * const fragSrc) {
     uint32_t vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertSrc, NULL);
@@ -154,18 +134,22 @@ void initRender(int (*renderFunction)(void *)) {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), NULL);
     glEnableVertexAttribArray(0);
 
-    char * const vertexShaderSource = "#version 330 core\n"
-                                     "layout (location = 0) in vec3 aPos;\n"
-                                     "void main()\n"
-                                     "{\n"
-                                     "   gl_Position = vec4(aPos, 1.0);\n"
-                                     "}\0";
-    char * const fragmentShaderSource = readFile("include/shader.fs");
+    const char * const vertexShaderSource = 
+                                    "#version 330 core\n"
+                                    "layout (location = 0) in vec3 aPos;\n"
+                                    "void main() {\n"
+                                    "   gl_Position = vec4(aPos, 1.0);\n"
+                                    "}";
+    const char * const fragmentShaderSource =
+                                    "#version 330 core\n"
+                                    "out vec4 FragColor;\n"
+                                    "uniform int sizex;\n"
+                                    "uniform int sizey;\n"
+                                    "uniform sampler2D pixels;\n"
+                                    "void main() {\n"
+                                    "    FragColor = texture(pixels,vec2(float(gl_FragCoord.x)/sizex,float(gl_FragCoord.y)/sizey),0);\n"
+                                    "}";
     uint32_t shaderProgram = makeShader(vertexShaderSource, fragmentShaderSource);
-
-    uint32_t framebuffer;
-    glGenFramebuffers(1, &framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
     uint32_t textureColorbuffer;
     glGenTextures(1, &textureColorbuffer);
