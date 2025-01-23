@@ -36,7 +36,7 @@ FSUB R32 R13 R11 //x2-x0																											011401513
 
 
 IMM R35 0x540																														017432500
-BSL R35 R35 4 //16.0f																												006434304
+BSL R35 R35 4 //32.0f																												006434304
 FDIV R33 R31 R35 //potentially swap to FMLT, but 16f can't be reused																013413743
 FDIV R34 R32 R35																													013424043
 FDIV R35 R35 R35																													013434343
@@ -59,7 +59,7 @@ XORM //else																															045000000
 		MOV R12 R13																													000141500
 POPM																																044000000
 //todo: calculate rasterization increment values																					
-IMM R13 0x380 //0.5f																												017151600
+IMM R13 0x3C0 //0.5f																												017151700
 BSL R13 R13 4																														006151504
 FADD R12 R12 R13																													010141415
 //NOP
@@ -164,14 +164,14 @@ FMLT R12 R12 R17																													012141421
 FMLT R13 R13 R17																													012151521
 ADD R63 R5 R2 //ycoord																												000770502
 FADD R10 R10 R12																													010121214
-IMM R2 0x3C0																														017021700
+IMM R2 0x400																														017022000
 FADD R11 R11 R13																													010131315
-IMM R24 0x540																														017302100
+IMM R24 0x540																														017302500
 FADD R10 R10 R14 //u																												010121216
 ADD R62 R4 R1 //xcoord																												000760401
 PSHM																																043000000
 FADD R11 R11 R15 //v																												010131317
-BSL R24 R24 4 //16.0f																												006303004
+BSL R24 R24 4 //32.0f																												006303004
 FDIV R10 R10 R24																													013121230
 MOV R10 R10																															000121200
 FLGM NN																																046000005
@@ -180,7 +180,7 @@ FLGM NN																																046000005
 	FSUB R2 R2 R10																													011020212
 	MOV R11 R11																														000131300
 	FLGM NN																															046000005
-		IMM R1 0x5BF																												017012677
+		IMM R1 0x5FF																												017012777
 		FSUB R2 R2 R11																												011020213
 		BSL R1 R1 4																													006010104
 		ADDI R1 R1 8																												004010110

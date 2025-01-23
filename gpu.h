@@ -4,7 +4,8 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#define WAVE_SIZE 31
+//Actual hardware will be 4, 8 for now
+#define WAVE_SIZE 24
 #define CORE_COUNT 4
 #define THRD_CNT (WAVE_SIZE * CORE_COUNT)
 
@@ -24,5 +25,12 @@ extern atomic_short gpu_commandStride;
 extern atomic_short gpu_atomicNumber;
 
 int startGpu(void *args);
+
+//#define INSPECT
+
+#ifdef INSPECT
+    extern atomic_short gpu_inspectX;
+    extern atomic_short gpu_inspectY;
+#endif
 
 #endif

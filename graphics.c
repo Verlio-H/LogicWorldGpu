@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #include "include/c11threads.h"
 #include "include/glad.h"
+#include "graphics.h"
 #include <GLFW/glfw3.h>
 
 #define WIDTH 256
@@ -108,11 +108,13 @@ void initRender(int (*renderFunction)(void *)) {
         return;
     }
 
-    glfwGetFramebufferSize(window, &rwidth, &rheight);
-    glfwSetWindowAspectRatio(window, rwidth, rheight);
-
     width = WIDTH;
     height = HEIGHT;
+
+    glfwGetFramebufferSize(window, &rwidth, &rheight);
+    glfwSetWindowAspectRatio(window, rwidth, rheight);
+    double scale = (double)rwidth/width;
+
 
     data = malloc(width * height * 4);
 
@@ -177,14 +179,17 @@ void initRender(int (*renderFunction)(void *)) {
     mtx_init(&windowmtx,mtx_plain);
     mtxptr = &windowmtx;
 
-    bool stop = false;
-    bool *pStop = &stop;
+    struct renderArgs args = (struct renderArgs){.stop = false, .mousePosX = 0, .mousePosY = 0};
+    
     thrd_t renderthread;
-    thrd_create(&renderthread, renderFunction, &pStop);
+    thrd_create(&renderthread, renderFunction, &args);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glfwSwapInterval(0);
     while(!glfwWindowShouldClose(window)) {
+        glfwGetCursorPos(window, &args.mousePosX, &args.mousePosY);
+        args.mousePosX *= (double)width/rwidth*scale;
+        args.mousePosY *= (double)height/rheight*scale;
         glUseProgram(shaderProgram);
         glBindTexture(GL_TEXTURE_2D, texture);
         glUniform1i(glGetUniformLocation(shaderProgram, "sizex"), rwidth);
@@ -200,7 +205,7 @@ void initRender(int (*renderFunction)(void *)) {
         glfwPollEvents();
     }
     glfwTerminate();
-    stop = true;
+    args.stop = true;
     thrd_join(renderthread, NULL);
 
     free(data);

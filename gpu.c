@@ -6,6 +6,7 @@
 
 #include "include/c11threads.h"
 
+#include "half.h"
 #include "gpu.h"
 #include "graphics.h"
 
@@ -23,10 +24,10 @@ typedef struct execUnit {
     uint16_t cstack[16];
     uint8_t csp;
     uint16_t registers[WAVE_SIZE][64];
-    uint16_t mem[1024];
-    atomic_short info[WAVE_SIZE][3];
+    uint16_t mem[256*WAVE_SIZE];
+    atomic_short info[WAVE_SIZE][4];
     atomic_bool flags[WAVE_SIZE][16];
-    _Float16 pipeliningBufferVals[WAVE_SIZE][BUFFER_COUNT];
+    uint16_t pipeliningBufferVals[WAVE_SIZE][BUFFER_COUNT];
     uint8_t pipeliningBufferDests[WAVE_SIZE][BUFFER_COUNT];
     thrd_t thread;
 } execUnit;
@@ -130,6 +131,11 @@ atomic_short gpu_commandStride;
 atomic_short gpu_atomicNumber;
 
 execUnit gpu[CORE_COUNT];
+
+#ifdef INSPECT
+    atomic_short gpu_inspectX;
+    atomic_short gpu_inspectY;
+#endif
 
 void updateFlags(execUnit *core, int thread, uint16_t result) {
     if (result == 0) {
@@ -305,52 +311,64 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                 break;
             }
             case (OP_FADD): {
-                int16_t op2Val = core->registers[thread][op2];
-                int16_t op3Val = core->registers[thread][op3];
-                _Float16 result = *(_Float16 *)&op2Val + *(_Float16 *)&op3Val;
+                uint16_t op2Val = core->registers[thread][op2];
+                uint16_t op3Val = core->registers[thread][op3];
+                bool exception;
+                uint16_t result = halfAdd(op2Val, op3Val, &exception);
                 core->pipeliningBufferVals[thread][BUFFER_FADD_0] = result;
                 core->pipeliningBufferDests[thread][BUFFER_FADD_0] = op1;
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_FSUB): {
-                int16_t op2Val = core->registers[thread][op2];
-                int16_t op3Val = core->registers[thread][op3];
-                _Float16 result = *(_Float16 *)&op2Val - *(_Float16 *)&op3Val;
+                uint16_t op2Val = core->registers[thread][op2];
+                uint16_t op3Val = core->registers[thread][op3];
+                bool exception;
+                uint16_t result = halfSub(op2Val, op3Val, &exception);
                 core->pipeliningBufferVals[thread][BUFFER_FADD_0] = result;
                 core->pipeliningBufferDests[thread][BUFFER_FADD_0] = op1;
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_FMLT): {
-                int16_t op2Val = core->registers[thread][op2];
-                int16_t op3Val = core->registers[thread][op3];
-                _Float16 result = *(_Float16 *)&op2Val * *(_Float16 *)&op3Val;
+                uint16_t op2Val = core->registers[thread][op2];
+                uint16_t op3Val = core->registers[thread][op3];
+                bool exception;
+                uint16_t result = halfMlt(op2Val, op3Val, &exception);
                 core->pipeliningBufferVals[thread][BUFFER_FMLT_0] = result;
                 core->pipeliningBufferDests[thread][BUFFER_FMLT_0] = op1;
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_FDIV): {
-                int16_t op2Val = core->registers[thread][op2];
-                int16_t op3Val = core->registers[thread][op3];
-                _Float16 result = *(_Float16 *)&op2Val / *(_Float16 *)&op3Val;
+                uint16_t op2Val = core->registers[thread][op2];
+                uint16_t op3Val = core->registers[thread][op3];
+                bool exception;
+                uint16_t result = halfDiv(op2Val, op3Val, &exception);
                 core->pipeliningBufferVals[thread][BUFFER_FDIV_0] = result;
                 core->pipeliningBufferDests[thread][BUFFER_FDIV_0] = op1;
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_FSQRT): {
-                int16_t op2Val = core->registers[thread][op2];
-                _Float16 result = sqrtf(*(_Float16 *)&op2Val);
+                uint16_t op2Val = core->registers[thread][op2];
+                bool exception;
+                uint16_t result = halfSqrt(op2Val, &exception);
                 core->pipeliningBufferVals[thread][BUFFER_FSQRT_0] = result;
                 core->pipeliningBufferDests[thread][BUFFER_FSQRT_0] = op1;
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_FTOI): {
-                int16_t op2Val = core->registers[thread][op2];
-                core->registers[thread][op1] = (int16_t)(*(_Float16 *)&op2Val);
+                uint16_t op2Val = core->registers[thread][op2];
+                core->registers[thread][op1] = halfToInt(op2Val);
                 break;
             }
             case (OP_ITOF): {
-                _Float16 op2Val = (_Float16)((int16_t)core->registers[thread][op2]);
-                core->registers[thread][op1] = *(uint16_t *)&op2Val;
+                int16_t op2Val = core->registers[thread][op2];
+                bool exception;
+                core->registers[thread][op1] = intToHalf(op2Val, &exception);
+                core->flags[thread][FLAG_E] = exception;
                 break;
             }
             case (OP_IMM): {
@@ -407,10 +425,18 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
             case (OP_OUT): {
                 int16_t x = core->registers[thread][62];
                 int16_t y = core->registers[thread][63];
-                uint16_t colorUpper = core->registers[thread][op1];
-                uint16_t colorMid = core->registers[thread][op2];
-                uint16_t colorLower = core->registers[thread][op3];
+                uint16_t colorRed = core->registers[thread][op1];
+                uint16_t colorGreen = core->registers[thread][op2];
+                uint16_t colorBlue = core->registers[thread][op3];
                 if (x<width && y<height) {
+                    #ifdef INSPECT
+                        if (atomic_load(&gpu_inspectX) == x && atomic_load(&gpu_inspectY) == y) {
+                            printf("Output at (%d, %d): (%d, %d, %d), ", x, y, colorRed, colorGreen, colorBlue);
+                            printf("Thread ID: (%d, %d), ", core->info[thread][0], core->info[thread][1]);
+                            printf("Command ID: %d\n", core->info[thread][2]);
+                        }
+                    #endif
+
                     mtx_lock(mtxptr);
 
                     uint8_t *bwrite;
@@ -422,9 +448,9 @@ void execThreadedInstruction(execUnit *core, uint32_t op, uint32_t op1, uint32_t
                     
                     uint16_t buffWidth = buffered ? width2 : width;
                     uint16_t buffHeight = buffered ? height2 : height;
-                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 0] = colorUpper & 0xFF;
-                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 1] = colorMid & 0xFF;
-                    bwrite[(buffHeight - y) * buffWidth * 4 + x * 4 + 2] = colorLower & 0xFF;
+                    bwrite[(buffHeight - y - 1) * buffWidth * 4 + x * 4 + 0] = colorRed & 0xFF;
+                    bwrite[(buffHeight - y - 1) * buffWidth * 4 + x * 4 + 1] = colorGreen & 0xFF;
+                    bwrite[(buffHeight - y - 1) * buffWidth * 4 + x * 4 + 2] = colorBlue & 0xFF;
 
                     mtx_unlock(mtxptr);
                 }
@@ -495,7 +521,7 @@ int runCore(void *arg) {
 
             for (uint8_t thread = 0; thread < WAVE_SIZE; ++thread) {
 
-                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FADD_3]] = *(uint16_t *)&core->pipeliningBufferVals[thread][BUFFER_FADD_3];
+                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FADD_3]] = core->pipeliningBufferVals[thread][BUFFER_FADD_3];
                 core->pipeliningBufferDests[thread][BUFFER_FADD_3] = core->pipeliningBufferDests[thread][BUFFER_FADD_2];
                 core->pipeliningBufferVals[thread][BUFFER_FADD_3] = core->pipeliningBufferVals[thread][BUFFER_FADD_2];
                 core->pipeliningBufferDests[thread][BUFFER_FADD_2] = core->pipeliningBufferDests[thread][BUFFER_FADD_1];
@@ -505,13 +531,13 @@ int runCore(void *arg) {
                 core->pipeliningBufferDests[thread][BUFFER_FADD_0] = 0;
                 core->pipeliningBufferVals[thread][BUFFER_FADD_0] = 0;
 
-                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FMLT_1]] = *(uint16_t *)&core->pipeliningBufferVals[thread][BUFFER_FMLT_1];
+                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FMLT_1]] = core->pipeliningBufferVals[thread][BUFFER_FMLT_1];
                 core->pipeliningBufferDests[thread][BUFFER_FMLT_1] = core->pipeliningBufferDests[thread][BUFFER_FMLT_0];
                 core->pipeliningBufferVals[thread][BUFFER_FMLT_1] = core->pipeliningBufferVals[thread][BUFFER_FMLT_0];
                 core->pipeliningBufferDests[thread][BUFFER_FMLT_0] = 0;
                 core->pipeliningBufferVals[thread][BUFFER_FMLT_0] = 0;
 
-                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FDIV_4]] = *(uint16_t *)&core->pipeliningBufferVals[thread][BUFFER_FDIV_4];
+                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FDIV_4]] = core->pipeliningBufferVals[thread][BUFFER_FDIV_4];
                 core->pipeliningBufferDests[thread][BUFFER_FDIV_4] = core->pipeliningBufferDests[thread][BUFFER_FDIV_3];
                 core->pipeliningBufferVals[thread][BUFFER_FDIV_4] = core->pipeliningBufferVals[thread][BUFFER_FDIV_3];
                 core->pipeliningBufferDests[thread][BUFFER_FDIV_3] = core->pipeliningBufferDests[thread][BUFFER_FDIV_2];
@@ -523,7 +549,7 @@ int runCore(void *arg) {
                 core->pipeliningBufferDests[thread][BUFFER_FDIV_0] = 0;
                 core->pipeliningBufferVals[thread][BUFFER_FDIV_0] = 0;
 
-                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FSQRT_3]] = *(uint16_t *)&core->pipeliningBufferVals[thread][BUFFER_FSQRT_3];
+                core->registers[thread][core->pipeliningBufferDests[thread][BUFFER_FSQRT_3]] = core->pipeliningBufferVals[thread][BUFFER_FSQRT_3];
                 core->pipeliningBufferDests[thread][BUFFER_FSQRT_3] = core->pipeliningBufferDests[thread][BUFFER_FSQRT_2];
                 core->pipeliningBufferVals[thread][BUFFER_FSQRT_3] = core->pipeliningBufferVals[thread][BUFFER_FSQRT_2];
                 core->pipeliningBufferDests[thread][BUFFER_FSQRT_2] = core->pipeliningBufferDests[thread][BUFFER_FSQRT_1];
@@ -598,10 +624,6 @@ int runCore(void *arg) {
             
             
             ++core->pc;
-            // printf("command %d thread %d\n", atomic_load(&core->info[0][1]), atomic_load(&core->info[0][0]));
-            // printf("command %d thread %d\n", atomic_load(&core->info[1][1]), atomic_load(&core->info[1][0]));
-            // printf("command %d thread %d\n", atomic_load(&core->info[2][1]), atomic_load(&core->info[2][0]));
-            // printf("command %d thread %d\n", atomic_load(&core->info[3][1]), atomic_load(&core->info[3][0]));
         }
     }
 }
@@ -625,7 +647,7 @@ void executeCommandBuffer(void) {
                 printf("%5d ", gpu_deviceMemory[commandPtr + i]);
             }
             for (int i = 5; i <= 11; ++i) {
-                printf("%10.7f ", (double)*(_Float16 *)&gpu_deviceMemory[commandPtr + i]);
+                printf("%10.7f ", halfToFloat(gpu_deviceMemory[commandPtr + i]));
             }
             printf("\n");
         #endif
@@ -681,6 +703,7 @@ void executeCommandBuffer(void) {
                         atomic_store(&gpu[core].info[i][0], queue[i][0]);
                         atomic_store(&gpu[core].info[i][1], queue[i][1]);
                         atomic_store(&gpu[core].info[i][2], queue[i][2]);
+                        atomic_store(&gpu[core].info[i][3], i);
                         absoluteMask += queueMask[i] << i;
                     }
                     gpu[core].mask = ((uint64_t)1 << WAVE_SIZE) - 1;

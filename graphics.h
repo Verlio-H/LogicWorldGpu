@@ -15,4 +15,10 @@ extern mtx_t* mtxptr;
 
 void initRender(int (*renderFunction)(void *));
 
+struct renderArgs {
+    bool stop;
+    double mousePosX;
+    double mousePosY;
+};
+
 #endif
