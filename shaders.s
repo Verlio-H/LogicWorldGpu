@@ -57,8 +57,7 @@ XORM //else																															045000000
 	SUB R0 R13 R12																													001001514
 	FLGM NN //if (R13 >= R12)																										046000005
 		MOV R12 R13																													000141500
-POPM																																044000000
-//todo: calculate rasterization increment values																					
+POPM																																044000000																					
 IMM R13 0x3C0 //0.5f																												017151700
 BSL R13 R13 4																														006151504
 FADD R12 R12 R13																													010141415
